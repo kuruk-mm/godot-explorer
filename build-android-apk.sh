@@ -26,22 +26,29 @@ cd "${EXPLORER_PATH}"
 cargo run -- build
 
 echo "Build for Android (arm64)"
-cd "${EXPLORER_PATH}/lib"
-bash android-build.sh
+cd "${EXPLORER_PATH}"
 
-# Temporarily disable strict error checking for the debug key setup.
-set +e
-echo "Setup Android Release Keys"
-cd /opt/ || exit 1
-keytool -keyalg RSA -genkeypair -alias androidreleasekey \
-    -keypass android -keystore release.keystore -storepass android \
-    -dname "CN=Android Release,O=Android,C=US" -validity 9999 -deststoretype pkcs12
+# Check if cargo-ndk is available
+if command -v cargo-ndk &> /dev/null; then
+    echo "Using cargo-ndk for Android build"
+    cargo run -- build --target android
+else
+    echo "cargo-ndk not found, falling back to traditional build"
+    cd "${EXPLORER_PATH}/lib"
+    bash android-build.sh
+fi
 
-export GODOT_ANDROID_KEYSTORE_RELEASE_PATH="/opt/release.keystore"
+# Generate Android release keystore if it doesn't exist
+if [ ! -f "${EXPLORER_PATH}/.bin/release.keystore" ]; then
+    echo "Generating Android Release Keys"
+    cd "${EXPLORER_PATH}"
+    cargo run -- generate-keystore --type release
+fi
+
+# Set environment variables for Godot export
+export GODOT_ANDROID_KEYSTORE_RELEASE_PATH="${EXPLORER_PATH}/.bin/release.keystore"
 export GODOT_ANDROID_KEYSTORE_RELEASE_USER="androidreleasekey"
 export GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD="android"
-# Re-enable strict error checking.
-set -e
 
 cd "${EXPLORER_PATH}/godot/"
 
